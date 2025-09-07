@@ -1,0 +1,23 @@
+from flask import Blueprint, jsonify
+from datetime import datetime
+from app.utils import httpStatusCodes
+
+main = Blueprint('health', __name__)
+
+@main.get('/health')
+def health_check():
+    return jsonify({
+        "status": "healthy",
+        "service": "ML-Backend",
+        "timestamp": datetime.utcnow().isoformat()
+    }), httpStatusCodes.HTTP_200_OK
+
+
+@main.get('/')
+def index():
+    return jsonify({
+        "message": "IoT ML Prediction Service",
+        "endpoints": {
+            "/health": "Health check endpoint"
+        }
+    }), httpStatusCodes.HTTP_200_OK
