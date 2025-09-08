@@ -50,7 +50,7 @@ def predict():
 
         if prediction:
             return jsonify({
-                "success": True,
+                "success": "true",
                 "data": {
                     "device_id": device_id,
                     "timestamp": datetime.now().isoformat(),

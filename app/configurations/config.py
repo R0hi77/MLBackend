@@ -6,7 +6,6 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env_path = os.path.join(BASE_DIR,'.env.dev')
 
-print(env_path)
 load_dotenv(env_path)
 
 class Config:
