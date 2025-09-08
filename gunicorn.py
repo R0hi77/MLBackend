@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-env_path = os.path.join(BASE_DIR,'.env.dev')
+env_path = os.path.join(BASE_DIR,'.env')
 
 load_dotenv(env_path)
 
