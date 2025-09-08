@@ -1,6 +1,6 @@
 services:
   MLBackend:
-    image: pathtoimaage
+    image: registry.gitlab.com/r0hi77_node/mlbackend:latest
     container_name: ml-backend
     ports:
       - "5000:5000"
@@ -10,7 +10,7 @@ services:
       - shared:/var/tmp
       - /var/log/MLBackend:/app/logs
     restart: unless-stopped
-    
+
 
 volumes:
   shared:
