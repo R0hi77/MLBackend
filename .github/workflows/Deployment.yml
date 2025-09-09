@@ -46,6 +46,8 @@ jobs:
       DOCKER_COMPOSE_FILE: docker-compose.yml
       
     steps:
+      - name: checkout code
+        uses: actions/checkout@v4
       - name: Copy docker compose script to server
         uses: appleboy/scp-action@v0.1.7
         with:
