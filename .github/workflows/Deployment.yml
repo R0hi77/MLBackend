@@ -3,7 +3,7 @@ name: Workflow to deploy ML backend to development environment
 on:
   push:
     branches:
-      - "staging"
+      - "development"
 
 jobs:
   build:
@@ -13,7 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: staging
+          ref: development
           fetch-depth: 0
       
       - name: Setup Docker Buildx
