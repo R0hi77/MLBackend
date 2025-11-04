@@ -11,6 +11,9 @@ import pandas as pd
 import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 
+
+os.environ["UCDA_VISIBLE_DEVICES"] = "-1"
+
 # Configure TensorFlow threading BEFORE any model operations
 tf.config.threading.set_inter_op_parallelism_threads(2)
 tf.config.threading.set_intra_op_parallelism_threads(4)
