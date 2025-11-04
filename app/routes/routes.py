@@ -22,3 +22,5 @@ def index():
             "api/v1/predict":"http post endpoint for making inference"
         }
     }), httpStatusCodes.HTTP_200_OK
+
+

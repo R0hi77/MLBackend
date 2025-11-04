@@ -21,6 +21,13 @@ def create_app():
     )
 
     mqtt.init_app(app)
+
+    app.logger.info(
+        "MQTT config: host=%s port=%s username=%s",
+        app.config.get("MQTT_BROKER_URL"),
+        app.config.get("MQTT_BROKER_PORT"),
+        "set" if app.config.get("MQTT_USERNAME") else "none",
+    )
     setup_mqtt_handlers(mqtt)
 
     model_manager = NILMModelManager()
