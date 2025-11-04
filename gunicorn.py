@@ -15,10 +15,12 @@ backlog = 2048
 # Worker processes
 workers = int(os.getenv("GUNICORN_WORKERS", 2))
 worker_class = "gthread"
-threads = int(os.getenv("GUNICORN_THREADS", 4))
+threads = int(os.getenv("GUNICORN_THREADS", 2))
 worker_connections = 1000
 timeout = 180
 keepalive = 2
+
+preload_app = False
 
 
 # Restart workers after this many requests, to help prevent memory leaks
@@ -41,8 +43,6 @@ user = None
 group = None
 tmp_upload_dir = None
 
-
-preload_app = True
 
 # Worker timeout
 graceful_timeout = 30

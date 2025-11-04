@@ -12,6 +12,10 @@ import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 
 # Configure TensorFlow threading BEFORE any model operations
+tf.config.threading.set_inter_op_parallelism_threads(2)
+tf.config.threading.set_intra_op_parallelism_threads(4)
+
+# Configure TensorFlow threading BEFORE any model operations
 os.environ["OMP_NUM_THREADS"] = "4"
 os.environ["TF_NUM_INTEROP_THREADS"] = "2"
 os.environ["TF_NUM_INTRAOP_THREADS"] = "4"
@@ -70,9 +74,6 @@ class NILMModelManager:
             # Load model
             self.model = tf.keras.models.load_model(model_path)
 
-            # Configure model for thread safety
-            tf.config.threading.set_inter_op_parallelism_threads(2)
-            tf.config.threading.set_intra_op_parallelism_threads(4)
 
             # Warm up the model with a dummy prediction (important!)
             dummy_main = np.zeros((1, self.window_size, 1), dtype=np.float32)
