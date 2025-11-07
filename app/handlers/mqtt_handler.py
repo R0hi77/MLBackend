@@ -18,7 +18,7 @@ def setup_mqtt_handlers(mqtt):
     def handle_connect(client, userdata, flags, rc):
         if rc == 0:
             logger.info("established connection with broker")
-            mqtt.subscribe("sensor-data/#")
+            mqtt.subscribe("sensor-data/#",qos=0)
         else:
             logger.info(f"failed to establish connection with logger {rc}")
 
@@ -106,7 +106,7 @@ def handle_sensor_data(topic_parts, message, mqtt):
                     "input_power": aggregate_power,
                 }
 
-                mqtt.publish(prediction_topic, json.dumps(prediction_payload))
+                mqtt.publish(prediction_topic, json.dumps(prediction_payload),qos=0)
                 logger.info(f" Published prediction for device {device_id}")
             else:
                 logger.error(f" Failed to generate predictions for device {device_id}")
