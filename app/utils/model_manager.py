@@ -33,6 +33,63 @@ class NILMModelManager:
     _lock = threading.Lock()
     _predict_lock = threading.Lock()  # NEW: Separate lock for predictions
 
+    # ===== CUSTOM METRICS FOR MODEL LOADING =====
+    @staticmethod
+    def _recall_m(y_true, y_pred):
+        """Recall metric for binary classification"""
+        y_pred_bin = tf.keras.backend.cast(
+            tf.keras.backend.greater(y_pred, 0.5), 
+            tf.keras.backend.floatx()
+        )
+        tp = tf.keras.backend.sum(
+            tf.keras.backend.cast(y_true * y_pred_bin, tf.keras.backend.floatx())
+        )
+        fn = tf.keras.backend.sum(
+            tf.keras.backend.cast(y_true * (1 - y_pred_bin), tf.keras.backend.floatx())
+        )
+        return tp / (tp + fn + tf.keras.backend.epsilon())
+
+    @staticmethod
+    def _precision_m(y_true, y_pred):
+        """Precision metric for binary classification"""
+        y_pred_bin = tf.keras.backend.cast(
+            tf.keras.backend.greater(y_pred, 0.5), 
+            tf.keras.backend.floatx()
+        )
+        tp = tf.keras.backend.sum(
+            tf.keras.backend.cast(y_true * y_pred_bin, tf.keras.backend.floatx())
+        )
+        fp = tf.keras.backend.sum(
+            tf.keras.backend.cast((1 - y_true) * y_pred_bin, tf.keras.backend.floatx())
+        )
+        return tp / (tp + fp + tf.keras.backend.epsilon())
+
+    @staticmethod
+    def _f1_m(y_true, y_pred):
+        """F1 score metric for binary classification"""
+        precision = NILMModelManager._precision_m(y_true, y_pred)
+        recall = NILMModelManager._recall_m(y_true, y_pred)
+        return 2 * ((precision * recall) / (precision + recall + tf.keras.backend.epsilon()))
+
+    @staticmethod
+    def _focal_loss(gamma=2.0, alpha=0.25):
+        """Focal loss function for handling class imbalance"""
+        def focal_loss_fixed(y_true, y_pred):
+            epsilon = tf.keras.backend.epsilon()
+            y_pred = tf.keras.backend.clip(y_pred, epsilon, 1.0 - epsilon)
+            
+            # Positive class loss
+            cross_entropy = -y_true * tf.keras.backend.log(y_pred)
+            weight = alpha * y_true * tf.keras.backend.pow(1 - y_pred, gamma)
+            
+            # Negative class loss
+            cross_entropy_neg = -(1 - y_true) * tf.keras.backend.log(1 - y_pred)
+            weight_neg = (1 - alpha) * (1 - y_true) * tf.keras.backend.pow(y_pred, gamma)
+            
+            loss = weight * cross_entropy + weight_neg * cross_entropy_neg
+            return tf.keras.backend.mean(loss)
+        return focal_loss_fixed
+
     def __new__(cls):
         if cls._instance is None:
             with cls._lock:
@@ -53,9 +110,9 @@ class NILMModelManager:
             "Toaster",
             "Washing_Machine",
             "Television",
+            "Fan",
         ]
-        self.window_size = 30
-        self.t1_window = 15
+        self.window_size = 120  # Updated for new LSTM+Attention model
         self.initialized = False
         self.logger = logging.getLogger(__name__)
 
@@ -74,17 +131,21 @@ class NILMModelManager:
                 self.logger.error(f"Scaler file not found: {scaler_path}")
                 return False
 
-            # Load model
-            self.model = tf.keras.models.load_model(model_path)
+            # Define custom objects for model loading
+            custom_objects = {
+                'focal_loss_fixed': self._focal_loss(gamma=2.0, alpha=0.25),
+                'precision_m': self._precision_m,
+                'recall_m': self._recall_m,
+                'f1_m': self._f1_m
+            }
 
+            # Load model with custom objects
+            self.model = tf.keras.models.load_model(model_path, custom_objects=custom_objects)
 
             # Warm up the model with a dummy prediction (important!)
-            dummy_main = np.zeros((1, self.window_size, 1), dtype=np.float32)
-            dummy_t1 = np.zeros((1, self.t1_window, 1), dtype=np.float32)
-            _ = self.model.predict(
-                {"main_window_input": dummy_main, "t1_window_input": dummy_t1},
-                verbose=0,
-            )
+            # New model uses single 120-timestep input
+            dummy_input = np.zeros((1, self.window_size, 1), dtype=np.float32)
+            _ = self.model.predict(dummy_input, verbose=0)
 
             self.scaler = joblib.load(scaler_path)
             self.initialized = True
@@ -102,10 +163,10 @@ class NILMModelManager:
             if device_id not in self.device_buffers:
                 # Initialize buffer with enough capacity for predictions
                 self.device_buffers[device_id] = deque(
-                    maxlen=self.window_size + self.t1_window
+                    maxlen=self.window_size
                 )
                 self.logger.debug(
-                    f"[{device_id}] initialized new buffer with maxlen {self.window_size + self.t1_window}"
+                    f"[{device_id}] initialized new buffer with maxlen {self.window_size}"
                 )
 
             self.device_buffers[device_id].append(aggregate_power)
@@ -126,15 +187,15 @@ class NILMModelManager:
                 )
                 return False
             current_length = len(self.device_buffers[device_id])
-            required_length = self.window_size + self.t1_window
+            required_length = self.window_size
             can = current_length >= required_length
             self.logger.debug(
                 f"[{device_id}] Buffer length: {current_length}, Required: {required_length}. Can predict: {can}"
             )
             return can
 
-    def prepare_sequence(self, device_id: str) -> Optional[Dict]:
-        """Prepare input sequences for prediction"""
+    def prepare_sequence(self, device_id: str) -> Optional[np.ndarray]:
+        """Prepare input sequence for prediction (single 120-timestep window)"""
         with self.buffer_lock:
             # Get the buffer for the device
             buffer_list = self.device_buffers.get(device_id)
@@ -143,10 +204,10 @@ class NILMModelManager:
             if (
                 not self.initialized
                 or buffer_list is None
-                or len(buffer_list) < (self.window_size + self.t1_window)
+                or len(buffer_list) < self.window_size
             ):
                 self.logger.debug(
-                    f"[{device_id}] Cannot prepare sequence. Initialized: {self.initialized}, Buffer exists: {buffer_list is not None}, Length sufficient: {len(buffer_list) >= (self.window_size + self.t1_window) if buffer_list else 'N/A'}"
+                    f"[{device_id}] Cannot prepare sequence. Initialized: {self.initialized}, Buffer exists: {buffer_list is not None}, Length sufficient: {len(buffer_list) >= self.window_size if buffer_list else 'N/A'}"
                 )
                 return None
 
@@ -163,19 +224,14 @@ class NILMModelManager:
         scaled_data = self.scaler.transform(dummy_df)
         scaled_aggregate = scaled_data[:, 0]  # Extract scaled aggregate
 
-        # Create sequences
-        main_window = (
+        # Create single window sequence (120 timesteps)
+        window = (
             scaled_aggregate[-self.window_size :]
             .reshape(1, self.window_size, 1)
             .astype(np.float32)
         )
-        t1_window = (
-            scaled_aggregate[-(self.window_size + self.t1_window) : -self.window_size]
-            .reshape(1, self.t1_window, 1)
-            .astype(np.float32)
-        )
 
-        return {"main_window_input": main_window, "t1_window_input": t1_window}
+        return window
 
     def predict_appliances(self, device_id: str) -> Optional[Dict]:
         """Make predictions for all appliances"""
@@ -195,7 +251,7 @@ class NILMModelManager:
 
         try:
             self.logger.info(
-                f"[{device_id}] Calling model.predict with input shapes: main={sequence['main_window_input'].shape}, t1={sequence['t1_window_input'].shape}"
+                f"[{device_id}] Calling model.predict with input shape: {sequence.shape}"
             )
 
             # CRITICAL: Use a separate lock for model predictions to prevent race conditions
@@ -263,7 +319,7 @@ class NILMModelManager:
                 return {"exists": False, "length": 0, "can_predict": False}
 
             buffer_length = len(self.device_buffers[device_id])
-            required_length = self.window_size + self.t1_window
+            required_length = self.window_size
             can_predict_status = buffer_length >= required_length
             self.logger.debug(
                 f"[{device_id}] Buffer status: length={buffer_length}, required={required_length}, can_predict={can_predict_status}"
