@@ -258,51 +258,71 @@ class NILMModelManager:
             with self._predict_lock:
                 predictions = self.model.predict(sequence, verbose=0)
 
+            # DETAILED DEBUGGING - Understanding prediction structure
             self.logger.info(
-                f"[{device_id}] Model.predict returned successfully. Number of outputs: {len(predictions)}"
+                f"[{device_id}] Predictions type: {type(predictions)}"
             )
-
-            # Process predictions
-            results = {}
-            for i, appliance in enumerate(self.appliances):
-                # Power prediction (need to inverse transform)
-                power_pred = predictions[2 * i][0][0]
-                self.logger.debug(
-                    f"[{device_id}] Raw power pred for {appliance}: {power_pred}"
+            self.logger.info(
+                f"[{device_id}] Predictions length: {len(predictions) if isinstance(predictions, (list, tuple)) else 'N/A'}"
+            )
+            
+            # Log each prediction element
+            if isinstance(predictions, (list, tuple)):
+                for idx, pred in enumerate(predictions):
+                    self.logger.info(
+                        f"[{device_id}] predictions[{idx}]: type={type(pred)}, shape={pred.shape if hasattr(pred, 'shape') else 'N/A'}"
+                    )
+            else:
+                self.logger.info(
+                    f"[{device_id}] Single prediction shape: {predictions.shape}"
                 )
 
-                # Create dummy array for inverse scaling
-                dummy = np.zeros((1, len(self.appliances) + 1))
-                dummy[0, i + 1] = power_pred  # +1 because Aggregate is first
+            # Process predictions based on actual structure
+            try:
+                if isinstance(predictions, (list, tuple)) and len(predictions) == 2:
+                    # Expected: predictions[0] = regression (1, 7), predictions[1] = classification (1, 7)
+                    regression_outputs = predictions[0][0]  # Shape: (7,)
+                    classification_outputs = predictions[1][0]  # Shape: (7,)
+                elif isinstance(predictions, np.ndarray):
+                    # Single array output - need to handle differently
+                    self.logger.error(f"[{device_id}] Unexpected single array output: {predictions.shape}")
+                    return None
+                else:
+                    self.logger.error(f"[{device_id}] Unknown prediction structure")
+                    return None
+                
+                results = {}
+                for i, appliance in enumerate(self.appliances):
+                    # Power prediction (need to inverse transform)
+                    power_pred = regression_outputs[i]
+                    
+                    # Create dummy array for inverse scaling
+                    dummy = np.zeros((1, len(self.appliances) + 1))
+                    dummy[0, i + 1] = power_pred  # +1 because Aggregate is first
 
-                try:
                     unscaled_power = self.scaler.inverse_transform(dummy)[0, i + 1]
-                    self.logger.debug(
-                        f"[{device_id}] Unscaled power for {appliance}: {unscaled_power}"
-                    )
-                except Exception as e:
-                    self.logger.error(
-                        f"[{device_id}] Error during scaler.inverse_transform for {appliance}: {e}"
-                    )
-                    unscaled_power = 0.0  # Fallback
 
-                # State prediction
-                state_raw = predictions[2 * i + 1][0][0]
-                state_pred = 1 if state_raw > 0.5 else 0
-                self.logger.debug(
-                    f"[{device_id}] Raw state pred for {appliance}: {state_raw}, Final state: {state_pred}"
+                    # State prediction
+                    state_raw = float(classification_outputs[i])
+                    state_pred = 1 if state_raw > 0.5 else 0
+
+                    results[appliance] = {
+                        "power": max(0, float(unscaled_power)),
+                        "state": state_pred,
+                        "confidence": state_raw,
+                    }
+
+                self.logger.info(
+                    f"[{device_id}] Successfully processed predictions for {len(results)} appliances"
                 )
-
-                results[appliance] = {
-                    "power": max(0, unscaled_power),  # Ensure non-negative
-                    "state": state_pred,
-                    "confidence": float(state_raw),
-                }
-
-            self.logger.info(
-                f"[{device_id}] Prediction processing complete. Returning results."
-            )
-            return results
+                return results
+                
+            except Exception as inner_e:
+                self.logger.error(
+                    f"[{device_id}] Error in prediction processing: {inner_e}",
+                    exc_info=True
+                )
+                return None
 
         except Exception as e:
             self.logger.error(
