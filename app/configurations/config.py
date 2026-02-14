@@ -17,5 +17,5 @@ class Config:
     # MQTT_USERNAME = os.getenv('MQTT_USERNAME', 'iotNodeUser')
     # MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', 'He11owor!d')
 
-    MODEL_PATH = os.getenv('MODEL_PATH', 'models/multi_appliance_model_continued_4.keras')
-    SCALER_PATH = os.getenv('SCALER_PATH','models/original_power_scaler_5.pkl')
+    MODEL_PATH = os.getenv('MODEL_PATH', 'models/multi_appliance_model.keras')
+    SCALER_PATH = os.getenv('SCALER_PATH','models/scaler.joblib')
