@@ -43,7 +43,7 @@ jobs:
           push: true
           tags: |
             registry.gitlab.com/r0hi77/circulr
-            registry.gitlab.com/r0hi77/circulr:${{github.sha}}
+            registry.gitlab.com/r0hi77/circulr:demo-model-latest
           platforms: linux/amd64
 
 
