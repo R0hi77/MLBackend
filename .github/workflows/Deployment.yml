@@ -42,11 +42,10 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            registry.gitlab.com/r0hi77_node/mlbackend:latest
-            registry.gitlab.com/r0hi77_node/mlbackend:${{github.sha}}
+            registry.gitlab.com/r0hi77/circulr
+            registry.gitlab.com/r0hi77/circulr:${{github.sha}}
           platforms: linux/amd64
-          cache-from: type=registry,ref=registry.gitlab.com/r0hi77_node/mlbackend:latest
-          cache-to: type=inline
+
 
   deploy:
     needs: build
