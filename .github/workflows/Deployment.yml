@@ -65,6 +65,7 @@ jobs:
           host: ${{ vars.DEV_HOST }}
           username: ${{ vars.DEV_USER }}
           key: ${{ secrets.DEV_HOST_PRIVATE_KEY }}
+          password: ${{ secrets.PASSWORD }}
           port: 22
           source: ${{env.DOCKER_COMPOSE_FILE}}
           target: /home/ubuntu
@@ -75,6 +76,7 @@ jobs:
           host: ${{ vars.DEV_HOST }}
           username: ${{ vars.DEV_USER }}
           key: ${{ secrets.DEV_HOST_PRIVATE_KEY }}
+          password: ${{ secrets.PASSWORD }}
           port: 22
           script: |
 
